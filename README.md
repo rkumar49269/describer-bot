@@ -47,10 +47,10 @@
 git clone [https://github.com/rkumar49269/describer-ai-bot.git](https://github.com/rkumar49269/describer-ai-bot.git)
 cd describer-ai-bot
 
-2. Install dependencies
+### 2. Install dependencies
 npm install
 
-3. Environment Variables
+### 3. Environment Variables
 Create a .env file in the root directory and add the following keys. (Note: You will need an App Password from your Google Account for the email functionality).
 
 TELEGRAM_BOT_TOKEN=your_telegram_botfather_token
@@ -59,5 +59,5 @@ PORT=3000
 EMAIL_USER=your_bot_email@gmail.com
 EMAIL_PASS=your_16_character_app_password
 
-4. Run the Bot
+### 4. Run the Bot
 npm start
