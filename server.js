@@ -148,8 +148,8 @@ function createPDFBuffer(textContext, sourceUrl) {
 async function processInstagramPost(chatId, userId, instagramUrl, userInstruction) {
   try {
     bot.sendMessage(chatId, userInstruction ? `🎯 Answering: "${userInstruction}"` : "🔬 Analyzing post...");
-    
-    const igData = await instagramGetUrl(instagramUrl);
+
+    const igData = await instagramGetUrl(instagramUrl, process.env.IG_SESSION_ID);
     const base64Images = [];
     const media = (igData.url_list || []).slice(0, 5);
 
