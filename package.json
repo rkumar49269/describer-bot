@@ -17,7 +17,7 @@
     "express": "^5.2.1",
     "instagram-url-direct": "^2.0.7",
     "node-telegram-bot-api": "^0.67.0",
-    "nodemailer": "^8.0.3",
-    "pdfkit": "^0.18.0"
+    "pdfkit": "^0.18.0",
+    "resend": "^6.9.4"
   }
 }
