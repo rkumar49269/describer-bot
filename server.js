@@ -4,26 +4,45 @@ import { instagramGetUrl } from 'instagram-url-direct';
 import express from 'express';
 import dotenv from 'dotenv';
 import PDFDocument from 'pdfkit';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
+
 
 dotenv.config();
 
-// --- Email Transporter Setup ---
-const transporter = nodemailer.createTransport({
-  // Direct IPv4 address for smtp.gmail.com to bypass broken IPv6 resolution
-  host: '74.125.20.108', 
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    // This tells the mail server we know we are using an IP instead of 'smtp.gmail.com'
-    servername: 'smtp.gmail.com', 
-    rejectUnauthorized: false
-  }
-});
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// --- Inside your /email command block ---
+if (emailMatch) {
+    const userEmail = emailMatch[1];
+    if (!userMemory.has(userId)) return bot.sendMessage(chatId, "⚠️ No recent analysis found.");
+
+    bot.sendChatAction(chatId, 'upload_document');
+    
+    try {
+      const memory = userMemory.get(userId);
+      const pdfBuffer = await createPDFBuffer(memory.visualDescription, memory.url);
+
+      // Sending via HTTP API instead of SMTP
+      await resend.emails.send({
+        from: 'Describer AI <onboarding@resend.dev>', // Free tier default sender
+        to: userEmail,
+        subject: 'Your Instagram Analysis Report',
+        text: 'Attached is your professionally generated report.',
+        attachments: [
+          {
+            filename: 'Describer_Report.pdf',
+            content: pdfBuffer,
+          },
+        ],
+      });
+
+      return bot.sendMessage(chatId, "✅ PDF sent successfully via Resend API!");
+    } catch (error) {
+      console.error("RESEND ERROR:", error);
+      return bot.sendMessage(chatId, "❌ API Delivery failed. Check Resend dashboard.");
+    }
+}
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
