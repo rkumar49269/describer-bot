@@ -10,18 +10,18 @@ dotenv.config();
 
 // --- Email Transporter Setup ---
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
+  // Direct IPv4 address for smtp.gmail.com to bypass broken IPv6 resolution
+  host: '74.125.20.108', 
   port: 465,
-  secure: true, // Use SSL/TLS
-  // Force IPv4 only (Resolves ENETUNREACH on Render)
-  family: 4, 
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   },
-  // Extra security layer for cloud environments
   tls: {
-    rejectUnauthorized: false 
+    // This tells the mail server we know we are using an IP instead of 'smtp.gmail.com'
+    servername: 'smtp.gmail.com', 
+    rejectUnauthorized: false
   }
 });
 
