@@ -8,11 +8,20 @@ import nodemailer from 'nodemailer';
 
 dotenv.config();
 
+// --- Email Transporter Setup ---
 const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com', // Explicitly use the host
+  port: 465,               // Standard secure port
+  secure: true,            // Use SSL
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  },
+  // ADD THIS BLOCK TO FIX ENETUNREACH
+  tls: {
+    // This forces the connection to use IPv4
+    family: 4 
   }
 });
 
