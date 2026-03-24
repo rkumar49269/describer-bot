@@ -145,7 +145,7 @@ async function processInstagramPost(chatId, userId, instagramUrl, userInstructio
 
     const igData = await instagramGetUrl(instagramUrl, process.env.IG_SESSION_ID);
     const base64Images = [];
-    const media = (igData.url_list || []).slice(0, 5);
+    const media = (igData.url_list || []).slice(0, 10);
 
     for (const url of media) {
       if (url.includes('.mp4')) continue;
