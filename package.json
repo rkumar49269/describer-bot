@@ -1,0 +1,22 @@
+{
+  "name": "describer-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/genai": "^2.27.0",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "instagram-url-direct": "^2.0.7",
+    "mongoose": "^9.10.4",
+    "ngrok": "^5.0.0-beta.2",
+    "playwright": "^1.63.0"
+  }
+}
