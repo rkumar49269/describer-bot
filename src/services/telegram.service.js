@@ -10,8 +10,10 @@ const { extractMediaUrls } = require("./instagram.service")
 const { downloadImages } = require("./media.service");
 const { describeImages, answerFollowUp } = require("./gemini.service");
 const { splitTelegramMessage } = require("../utils/telegram.util");
-const { findConversationByTelegramMessageId } = require("./conversation.service");
+const { findConversationByTelegramMessageId, findLatestConversationByUserId } = require("./conversation.service");
 const Conversation = require("../models/conversation.model");
+const { createPDFBuffer } = require("./pdf.service");
+const { sendAnalysisEmail } = require("../clients/email.client");
 
 const pendingRequests = new Map();
 const PENDING_PROMPT_TIMEOUT = 10000;
@@ -81,7 +83,7 @@ const processInstagramRequest = async (
         }
 
         await Conversation.create({
-            userId: String(chatId),
+            userId: String(message.from.id),
 
             rootTelegramMessageId,
 
@@ -121,8 +123,10 @@ const processInstagramRequest = async (
 };
 
 const handleTelegramMessage = async (message) => {
+
     const chatId = message.chat.id
     const text = message.text?.trim()
+    const userId = String(message.from.id);
 
     if (!text) return
 
@@ -154,6 +158,66 @@ const handleTelegramMessage = async (message) => {
 
         return;
     }
+
+    const emailMatch = text.match(
+        /^\/email\s+([^\s@]+@[^\s@]+\.[^\s@]+)/i
+    );
+
+    if (emailMatch) {
+        const userEmail = emailMatch[1];
+
+        const conversation = await findLatestConversationByUserId(userId);
+
+        if (!conversation) {
+            await telegramClient.sendMessage(
+                chatId,
+                "❌ No recent Instagram analysis found."
+            );
+            return;
+        }
+
+        await telegramClient.sendChatAction(chatId, "upload_document");
+
+        await telegramClient.sendMessage(
+            chatId,
+            "Generating PDF and sending..."
+        );
+
+        try {
+            const initialAnalysis = conversation.messages.find(
+                (message) => message.role === "assistant"
+            );
+
+            if (!initialAnalysis) {
+                throw new Error("No analysis found in conversation.");
+            }
+
+            const pdfBuffer = await createPDFBuffer(
+                initialAnalysis.content,
+                conversation.instagramUrl
+            );
+
+            await sendAnalysisEmail({
+                to: userEmail,
+                pdfBuffer
+            });
+
+            await telegramClient.sendMessage(
+                chatId,
+                "✅ PDF successfully sent!"
+            );
+        } catch (error) {
+            console.error("Email report error:", error);
+
+            await telegramClient.sendMessage(
+                chatId,
+                "❌ Failed to send email via API. Check your Resend Key."
+            );
+        }
+
+        return;
+    }
+
 
     const replyToMessageId = message.reply_to_message?.message_id;
 
@@ -210,6 +274,7 @@ const handleTelegramMessage = async (message) => {
         }
     }
 
+
     const instagramUrl = extractInstagramUrl(text)
 
     const pendingRequest = pendingRequests.get(chatId);
@@ -219,10 +284,7 @@ const handleTelegramMessage = async (message) => {
         pendingRequests.delete(chatId);
 
         await processInstagramRequest(
-            {
-                ...pendingRequest.message,
-                text: `${pendingRequest.instagramUrl}\n\n${text}`
-            },
+            message,
             pendingRequest.instagramUrl,
             text
         );
@@ -252,7 +314,7 @@ const handleTelegramMessage = async (message) => {
             return;
         }
 
-        // URL only → wait 3 seconds for a separate prompt
+        // URL only → wait 10 seconds for a separate prompt
         const existingRequest = pendingRequests.get(chatId);
 
         if (existingRequest) {

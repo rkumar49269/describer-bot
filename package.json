@@ -17,6 +17,8 @@
     "instagram-url-direct": "^2.0.7",
     "mongoose": "^9.10.4",
     "ngrok": "^5.0.0-beta.2",
-    "playwright": "^1.63.0"
+    "pdfkit": "^0.20.2",
+    "playwright": "^1.63.0",
+    "resend": "^6.32.0"
   }
 }

@@ -6,6 +6,11 @@ const findConversationByTelegramMessageId = async (telegramMessageId) => {
     });
 };
 
+const findLatestConversationByUserId = async (userId) => {
+    return Conversation.findOne({ userId }).sort({ createdAt: -1 });
+};
+
 module.exports = {
-    findConversationByTelegramMessageId
+    findConversationByTelegramMessageId,
+    findLatestConversationByUserId
 };
