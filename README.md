@@ -1,8 +1,8 @@
 # Describer Bot — Backend
 
-Backend for **Describer**, an AI-powered Telegram bot that analyzes Instagram posts using Gemini and supports conversational follow-up questions about the analyzed content.
+Backend for **Describer**, an AI-powered Telegram bot that analyzes Instagram posts using Google Gemini and supports conversational follow-up questions, PDF report generation, and email delivery.
 
-The backend is built with **Node.js + Express**, uses **MongoDB** for conversation persistence, **Playwright** for Instagram media extraction, and **Google Gemini** for multimodal analysis and follow-up responses.
+The backend is built with **Node.js + Express**, uses **MongoDB** for conversation persistence, **Playwright** for Instagram media extraction, **Google Gemini** for multimodal analysis, and **Resend** for email delivery.
 
 ---
 
@@ -16,7 +16,7 @@ The backend is built with **Node.js + Express**, uses **MongoDB** for conversati
   * Carousel posts
 * 🔍 Extracts Instagram media using a persistent Playwright browser session
 * 🧠 Gemini vision analysis of Instagram images
-* 💬 Follow-up questions using conversation context
+* 💬 Follow-up questions using stored conversation context
 * 🗃️ MongoDB persistence for conversations
 * ⌨️ Telegram typing indicator while AI is processing
 * 🧹 Telegram message formatting and automatic message splitting
@@ -25,6 +25,8 @@ The backend is built with **Node.js + Express**, uses **MongoDB** for conversati
   * Instagram URL + prompt in the same message
   * Instagram URL followed by a separate prompt
   * Follow-up questions by replying to the bot's previous response
+* 📄 PDF report generation from the latest Instagram analysis
+* 📧 Email delivery of generated PDF reports using Resend
 * 🔁 Gemini retry handling for temporary `503` errors
 * 🧩 Layered backend architecture for easier maintenance and extension
 
@@ -49,6 +51,8 @@ Telegram Service
    ├── Session Management
    ├── Instagram URL Extraction
    ├── Conversation Lookup
+   ├── Follow-up Handling
+   └── Email/PDF Handling
    │
    ▼
 Instagram Service
@@ -58,25 +62,33 @@ Instagram Service
           └── Playwright
                  │
                  ▼
-          Instagram Media
+            Instagram Media
                  │
                  ▼
-          Media Service
+            Media Service
                  │
                  ▼
-          Gemini Service
+            Gemini Service
                  │
                  ▼
-          Gemini Client
+            Gemini Client
                  │
                  ▼
-            AI Response
+             AI Response
                  │
-                 ▼
-          Telegram Client
-                 │
-                 ▼
-              User
+          ┌──────┴──────┐
+          ▼             ▼
+      Telegram       MongoDB
+       Client      Conversation
+                       │
+                       ▼
+                 PDF Service
+                       │
+                       ▼
+                 Email Client
+                       │
+                       ▼
+                    Resend
 ```
 
 ---
@@ -96,6 +108,7 @@ describer-backend/
     ├── app.js
     │
     ├── clients/
+    │   ├── email.client.js
     │   ├── gemini.client.js
     │   ├── instagram.client.js
     │   └── telegram.client.js
@@ -122,6 +135,7 @@ describer-backend/
     │   ├── gemini.service.js
     │   ├── instagram.service.js
     │   ├── media.service.js
+    │   ├── pdf.service.js
     │   ├── telegram-session.service.js
     │   └── telegram.service.js
     │
@@ -198,13 +212,19 @@ It:
 * Extracts carousel media from Instagram page data
 * Falls back to `og:image` for single-image posts
 
+#### `email.client.js`
+
+Centralizes email delivery through Resend.
+
+It is responsible for sending generated PDF reports as email attachments.
+
 ---
 
-### `services/`
+## `services/`
 
 Contains the application's business logic.
 
-#### `telegram.service.js`
+### `telegram.service.js`
 
 Coordinates the main Telegram workflow.
 
@@ -217,8 +237,12 @@ It handles:
 * Pending URL → prompt workflow
 * Follow-up conversations
 * Telegram responses
+* PDF generation requests
+* Email delivery requests
 
-#### `instagram.service.js`
+---
+
+### `instagram.service.js`
 
 Coordinates Instagram analysis.
 
@@ -234,11 +258,15 @@ Media Service
 Image Buffers
 ```
 
-#### `media.service.js`
+---
+
+### `media.service.js`
 
 Downloads extracted Instagram images and converts them into buffers suitable for Gemini processing.
 
-#### `gemini.service.js`
+---
+
+### `gemini.service.js`
 
 Contains Gemini-specific application logic.
 
@@ -248,15 +276,43 @@ It handles:
 * Structured initial responses
 * Conversation-aware follow-up questions
 
-#### `conversation.service.js`
+The initial analysis produces:
+
+```json
+{
+  "answer": "...",
+  "context": "..."
+}
+```
+
+The generated `context` is stored with the conversation and reused for follow-up questions.
+
+---
+
+### `conversation.service.js`
 
 Handles conversation lookup from MongoDB.
 
 For example, a Telegram reply can be mapped back to the conversation that generated the original response.
 
-#### `telegram-session.service.js`
+---
+
+### `telegram-session.service.js`
 
 Maintains active Telegram user sessions in memory.
+
+---
+
+### `pdf.service.js`
+
+Generates a PDF report from the initial Instagram analysis.
+
+The report includes:
+
+* Describer analysis
+* Original Instagram source URL
+* Formatted analysis content
+* Describer AI footer
 
 ---
 
@@ -286,29 +342,33 @@ Extract Instagram URL
  ▼
 Instagram Client
  │
- │ Playwright
- ▼
+ └── Playwright
+        │
+        ▼
 Instagram Media URLs
- │
- ▼
+        │
+        ▼
 Media Service
- │
- ▼
+        │
+        ▼
 Image Buffers
- │
- ▼
+        │
+        ▼
 Gemini Vision
- │
- ▼
+        │
+        ▼
 {
     answer,
     context
 }
- │
- ├───────────────┐
- ▼               ▼
-Telegram       MongoDB
-Response       Conversation
+        │
+   ┌────┴─────┐
+   ▼          ▼
+Telegram    MongoDB
+Response   Conversation
+              │
+              ▼
+          Follow-ups
 ```
 
 The `context` generated by Gemini is stored so that later questions can be answered without reprocessing the Instagram post.
@@ -354,6 +414,49 @@ Each conversation stores:
 * Creation/update timestamps
 
 This allows Telegram reply messages to be mapped back to their corresponding conversation.
+
+---
+
+## 📄 PDF & Email Reports
+
+After an Instagram analysis, the latest analysis can be converted into a PDF report and sent through email.
+
+The Telegram command is:
+
+```text
+/email your@email.com
+```
+
+The workflow is:
+
+```text
+Telegram
+   │
+   ▼
+/email command
+   │
+   ▼
+Latest Conversation
+   │
+   ▼
+PDF Service
+   │
+   ▼
+PDF Buffer
+   │
+   ▼
+Email Client
+   │
+   ▼
+Resend
+   │
+   ▼
+User Email
+```
+
+The PDF is generated dynamically from the stored assistant analysis and includes the original Instagram source URL.
+
+> During development, Resend's testing restrictions may limit email delivery to the account's verified/testing recipient. Production email delivery requires appropriate Resend domain configuration.
 
 ---
 
@@ -416,20 +519,47 @@ https://instagram.com/p/example
 Describe the product and extract all visible text.
 ```
 
+The URL and prompt are processed together.
+
 ### Separate messages
 
 ```text
 User:
 https://instagram.com/p/example
 
-Bot:
-Send your prompt...
-
 User:
 Describe the product and extract the text.
 ```
 
-The second workflow uses a temporary pending-request mechanism before processing the Instagram post.
+The backend temporarily stores the Instagram request and waits for the user's prompt before starting the analysis.
+
+---
+
+## 📧 Email Workflow
+
+The `/email` command uses the user's latest conversation.
+
+The backend:
+
+1. Finds the latest conversation for the Telegram user.
+2. Retrieves the initial AI analysis.
+3. Generates a PDF from that analysis.
+4. Sends the PDF as an email attachment.
+5. Confirms the result through Telegram.
+
+The email integration is isolated in:
+
+```text
+src/clients/email.client.js
+```
+
+while PDF generation is handled by:
+
+```text
+src/services/pdf.service.js
+```
+
+This keeps external email communication separate from PDF generation and Telegram business logic.
 
 ---
 
@@ -444,6 +574,8 @@ The second workflow uses a temporary pending-request mechanism before processing
 | Google Gemini    | Multimodal AI analysis       |
 | Playwright       | Instagram browser automation |
 | Telegram Bot API | User interaction             |
+| PDFKit           | PDF report generation        |
+| Resend           | Email delivery               |
 | Nodemon          | Local development            |
 
 ---
@@ -460,6 +592,8 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 GEMINI_API_KEY=your_gemini_api_key
 
 MONGODB_URI=your_mongodb_connection_string
+
+RESEND_API_KEY=your_resend_api_key
 ```
 
 ### Important
@@ -535,9 +669,11 @@ Telegram communicates with the backend through:
 POST /api/telegram/webhook
 ```
 
-The deployed server should expose a publicly accessible HTTPS endpoint.
+For local development, the webhook can be exposed through a public HTTPS tunnel.
 
-The Telegram webhook should point to:
+For production, the server should expose a publicly accessible HTTPS endpoint.
+
+The webhook should point to:
 
 ```text
 https://YOUR_DOMAIN/api/telegram/webhook
@@ -602,7 +738,9 @@ For production deployment, the Playwright browser profile requires a persistent 
 * Playwright requires a persistent browser environment.
 * Telegram session state is currently maintained in application memory.
 * Gemini responses depend on model/API availability.
+* Resend production email delivery requires appropriate domain configuration.
 * Production deployment should provide persistent storage for the Playwright profile where required.
+* PDF generation and email delivery currently process the stored initial analysis rather than the complete conversation history.
 
 ---
 
@@ -610,8 +748,6 @@ For production deployment, the Playwright browser profile requires a persistent 
 
 Planned improvements include:
 
-* PDF report generation
-* Email delivery of generated reports
 * Better production handling for Playwright sessions
 * More robust Telegram session persistence
 * Improved media ingestion performance
@@ -619,6 +755,7 @@ Planned improvements include:
 * Automated testing
 * Production deployment configuration
 * Better error classification and monitoring
+* Resend domain verification for unrestricted production email delivery
 
 ---
 
@@ -638,6 +775,14 @@ Previous implementation
 
 The current `main` branch contains the rebuilt backend architecture with separated routes, controllers, services, clients, utilities, and models.
 
+The current implementation also includes:
+
+* Conversation persistence
+* Reply-based follow-up conversations
+* Separate prompt handling
+* PDF report generation
+* Email delivery through Resend
+
 ---
 
 ## 👨‍💻 Author
@@ -645,6 +790,7 @@ The current `main` branch contains the rebuilt backend architecture with separat
 **Rohit Kumar**
 
 GitHub:
+
 https://github.com/rkumar49269
 
 ---
